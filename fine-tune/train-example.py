@@ -10,14 +10,14 @@ MODEL_OUTPUT_DIR = f"{ProjPaths.get_project_root()}/output/{RUN_NAME}"
 TEST_FILEPATH = f"{ProjPaths.get_project_root()}/data/{DATASET}/test.jsonl"
 
 
-def main(lora: bool):
+def run_train_exp(lora: bool):
     # 准备数据集
     ds_processor = DatasetProcessor(DATASET, PROMPT, file_name="data", max_length=MAX_LENGTH)
-    ds_processor.prepare_dataset()
     # 模型训练准备
     helper = TrainHelper(MODEL_ID, ds_processor)
     helper.use_swanlab(SWANLAB_PROJECT_NAME)
     helper.init_model()
+    ds_processor.prepare_dataset(helper.tokenizer)
     if lora:
         # 定义LoRA配置
         lora_config = LoraConfig(
@@ -50,7 +50,3 @@ def main(lora: bool):
     # 模型测试
     helper.check_model(pandas.read_json(TEST_FILEPATH, lines=True)[:3])
     swanlab.finish()
-
-
-if __name__ == "__main__":
-    main(lora=True)

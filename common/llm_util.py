@@ -60,6 +60,7 @@ class DatasetProcessor:
         self.format_val_fp = None
         self.val_filepath = None
         self.train_filepath = None
+        self.tokenizer = None
         self.ds_name = ds_name
         self.subset_name = subset_name
         self.train_ratio = train_ratio
@@ -76,6 +77,7 @@ class DatasetProcessor:
             train_ratio (float, optional): 训练集占比，默认为0.9
             file_name (str, optional): 保存数据集的文件夹名称，默认为"dataset"
         """
+        print("正在下载数据集...")
         # 加载数据集并打乱顺序
         ds = MsDataset.load(self.ds_name, subset_name=self.subset_name, split='train')
         data_list = list(ds)
@@ -109,6 +111,7 @@ class DatasetProcessor:
         """
         将原始数据集转换为大模型微调所需数据格式的新数据集
         """
+        print("标准化数据集...")
         new_path = origin_path.replace(".jsonl", "_format.jsonl")
         if not os.path.exists(new_path):
             messages = []
@@ -137,28 +140,29 @@ class DatasetProcessor:
         dataset = ds.map(self.dataset_process_func, remove_columns=ds.column_names)
         return dataset
 
-    def dataset_process_func(self, tokenizer, example):
+    def dataset_process_func(self, example):
         """
         将数据集进行预处理
         """
         input_ids, attention_mask, labels = [], [], []
-        instruction = tokenizer(
+        instruction = self.tokenizer(
             f"<|im_start|>system\n{self.prompt}<|im_end|>\n<|im_start|>user\n{example['input']}<|im_end|>\n<|im_start|>assistant\n",
             add_special_tokens=False,
         )
-        response = tokenizer(f"{example['output']}", add_special_tokens=False)
-        input_ids = instruction["input_ids"] + response["input_ids"] + [tokenizer.pad_token_id]
+        response = self.tokenizer(f"{example['output']}", add_special_tokens=False)
+        input_ids = instruction["input_ids"] + response["input_ids"] + [self.tokenizer.pad_token_id]
         attention_mask = (
                 instruction["attention_mask"] + response["attention_mask"] + [1]
         )
-        labels = [-100] * len(instruction["input_ids"]) + response["input_ids"] + [tokenizer.pad_token_id]
+        labels = [-100] * len(instruction["input_ids"]) + response["input_ids"] + [self.tokenizer.pad_token_id]
         if len(input_ids) > self.max_length:  # 做一个截断
             input_ids = input_ids[:self.max_length]
             attention_mask = attention_mask[:self.max_length]
             labels = labels[:self.max_length]
         return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
-    def prepare_dataset(self):
+    def prepare_dataset(self, tokenizer):
+        self.tokenizer = tokenizer
         # 获取数据集
         train_fp, val_fp = self.download_dataset()
         # 格式化数据集
