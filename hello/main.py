@@ -1,6 +1,3 @@
-from openApiCall import *
-
-
 def main():
 
     print()

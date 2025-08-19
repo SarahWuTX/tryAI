@@ -3,7 +3,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from enums import *
+from common.enums import *
 
 load_dotenv()
 DOUBAO_CLIENT = OpenAI(
@@ -32,7 +32,7 @@ class AiAgent:
         __messages (list): 存储对话历史的消息列表
         __client: AI客户端实例
         __model: 使用的模型ID
-        _settings (dict): 额外的配置参数
+        __settings (dict): 额外的配置参数
     """
 
     def __init__(self, model: ModelId, base_msg="", **kwargs):

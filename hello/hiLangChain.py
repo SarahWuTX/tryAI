@@ -5,7 +5,7 @@ from langchain_community.llms import Tongyi
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 
-from enums import ApiKey
+from common.enums import ApiKey
 
 
 def create_memory_chatbot():
