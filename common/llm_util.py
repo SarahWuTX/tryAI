@@ -7,10 +7,9 @@ import swanlab
 import torch
 from datasets import Dataset
 from pandas import Series
-from peft import LoraConfig, get_peft_model
+from peft import get_peft_model
 from transformers import (
     AutoModelForCausalLM,
-    TrainingArguments,
     Trainer,
     DataCollatorForSeq2Seq
 )
@@ -30,6 +29,7 @@ def download_model(model_id: str, save_dir=None):
     Returns:
         str: 下载的模型目录路径
     """
+    print(f"下载模型{model_id}到{save_dir}...")
     if not save_dir:
         save_dir = ProjPaths.get_model_dir()
     model_dir = snapshot_download(model_id, cache_dir=save_dir, revision="master")
@@ -44,6 +44,7 @@ def load_model(model_local_dir: str):
     Returns:
         tokenizer, model
     """
+    print("加载模型...")
     tokenizer = AutoTokenizer.from_pretrained(model_local_dir, use_fast=False, trust_remote_code=True)
     device_maop = {
         "": "cuda:0"
@@ -53,7 +54,7 @@ def load_model(model_local_dir: str):
 
 
 class DatasetProcessor:
-    def __init__(self, ds_name, prompt, subset_name="default", train_ratio=0.9, file_name="data", max_length=512):
+    def __init__(self, ds_name, config: dict, subset_name="default", train_ratio=0.9, file_name="data"):
         self.eval_dataset = None
         self.train_dataset = None
         self.format_train_fp = None
@@ -65,8 +66,8 @@ class DatasetProcessor:
         self.subset_name = subset_name
         self.train_ratio = train_ratio
         self.file_name = file_name
-        self.prompt = prompt
-        self.max_length = max_length
+        for key, value in config.items():
+            setattr(self, key, value)
 
     def download_dataset(self):
         """
@@ -77,7 +78,7 @@ class DatasetProcessor:
             train_ratio (float, optional): 训练集占比，默认为0.9
             file_name (str, optional): 保存数据集的文件夹名称，默认为"dataset"
         """
-        print("正在下载数据集...")
+        print("下载数据集...")
         # 加载数据集并打乱顺序
         ds = MsDataset.load(self.ds_name, subset_name=self.subset_name, split='train')
         data_list = list(ds)
@@ -135,6 +136,7 @@ class DatasetProcessor:
         return new_path
 
     def process_jsonfile(self, json_file_path) -> Dataset:
+        print("转化数据集至模型可用...")
         df = pandas.read_json(json_file_path, lines=True)
         ds = Dataset.from_pandas(df)
         dataset = ds.map(self.dataset_process_func, remove_columns=ds.column_names)
@@ -175,15 +177,15 @@ class DatasetProcessor:
 
 
 class TrainHelper:
-    def __init__(self, model_id: str, dataset_processor: DatasetProcessor):
+    def __init__(self, model_id: str, config: dict):
         self.model = None
         self.tokenizer = None
+        # self.dataset_processor = None
         # 初始化
         self.model_id = model_id
-        self.dataset_processor = dataset_processor
         self._use_swanlab = False
-        self.max_length = self.dataset_processor.max_length
-        self.prompt = self.dataset_processor.prompt
+        for key, value in config.items():
+            setattr(self, key, value)
 
     def init_model(self):
         # 在modelscope上下载Qwen模型到本地目录下
@@ -203,17 +205,19 @@ class TrainHelper:
         print("[done]swanlab update")
 
     def set_lora(self, lora_config):
+        print("设置lora...")
         self.lora_config = lora_config
         self.model = get_peft_model(self.model, lora_config)
 
-    def train(self, train_args):
-        if self.dataset_processor.train_dataset is None or self.dataset_processor.eval_dataset is None:
-            self.dataset_processor.prepare_dataset()
+    def train(self, train_args, dataset_processor: DatasetProcessor):
+        print("开始训练...")
+        if dataset_processor.train_dataset is None or dataset_processor.eval_dataset is None:
+            dataset_processor.prepare_dataset(self.tokenizer)
         self.trainer = Trainer(
             model=self.model,
             args=train_args,
-            train_dataset=self.dataset_processor.train_dataset,
-            eval_dataset=self.dataset_processor.eval_dataset,
+            train_dataset=dataset_processor.train_dataset,
+            eval_dataset=dataset_processor.eval_dataset,
             data_collator=DataCollatorForSeq2Seq(tokenizer=self.tokenizer, padding=True),
         )
         self.trainer.train()
@@ -236,9 +240,9 @@ class TrainHelper:
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return response
 
-    def check_model(self, test_series: Series):
+    def check_model(self, ds_processor: DatasetProcessor, n=3):
         # 用测试集的前3条，主观看模型
-        # test_df = pandas.read_json(jsonl_filepath, lines=True)[:n]
+        test_series = pandas.read_json(ds_processor.format_val_fp, lines=True)[:n]
         test_text_list = []
         for index, row in test_series.iterrows():
             instruction = row['instruction']

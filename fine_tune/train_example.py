@@ -1,22 +1,28 @@
+from peft import LoraConfig
+from transformers import TrainingArguments
+
 from common.llm_util import *
 
 MODEL_ID = "Qwen/Qwen3-1.7B"
 DATASET = "krisfu/delicate_medical_r1_data"
 PROMPT = "你是一个医学专家，你需要根据用户的问题，给出带有思考的回答。"
-MAX_LENGTH = 2048
-RUN_NAME = "qwen3-1.7B"
 SWANLAB_PROJECT_NAME = "qwen3-sft-medical"
-MODEL_OUTPUT_DIR = f"{ProjPaths.get_project_root()}/output/{RUN_NAME}"
-TEST_FILEPATH = f"{ProjPaths.get_project_root()}/data/{DATASET}/test.jsonl"
+SWANLAB_RUN_NAME = "qwen3-1.7B"
+MODEL_OUTPUT_DIR = f"{ProjPaths.get_project_root()}/output/{SWANLAB_RUN_NAME}"
+MAX_LENGTH = 2048
+CONFIG = {
+    "prompt": "你是一个医学专家，你需要根据用户的问题，给出带有思考的回答。",
+    "max_length": 2048,
+}
 
 
 def run_train_exp(lora: bool):
-    # 准备数据集
-    ds_processor = DatasetProcessor(DATASET, PROMPT, file_name="data", max_length=MAX_LENGTH)
     # 模型训练准备
-    helper = TrainHelper(MODEL_ID, ds_processor)
+    helper = TrainHelper(MODEL_ID, CONFIG)
     helper.use_swanlab(SWANLAB_PROJECT_NAME)
     helper.init_model()
+    # 准备数据集
+    ds_processor = DatasetProcessor(DATASET, CONFIG, file_name="data")
     ds_processor.prepare_dataset(helper.tokenizer)
     if lora:
         # 定义LoRA配置
@@ -44,9 +50,13 @@ def run_train_exp(lora: bool):
         save_on_each_node=True,
         gradient_checkpointing=True,
         report_to="swanlab",
-        run_name=RUN_NAME,
+        run_name=SWANLAB_RUN_NAME,
     )
-    helper.train(args)
+    helper.train(args, ds_processor)
     # 模型测试
-    helper.check_model(pandas.read_json(TEST_FILEPATH, lines=True)[:3])
+    helper.check_model(ds_processor)
     swanlab.finish()
+
+
+if __name__ == "__main__":
+    run_train_exp(lora=True)
