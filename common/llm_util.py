@@ -29,9 +29,9 @@ def download_model(model_id: str, save_dir=None):
     Returns:
         str: 下载的模型目录路径
     """
-    print(f"下载模型{model_id}到{save_dir}...")
     if not save_dir:
         save_dir = ProjPaths.get_model_dir()
+    print(f"下载模型{model_id}到{save_dir}...")
     model_dir = snapshot_download(model_id, cache_dir=save_dir, revision="master")
     return f"{save_dir}/{model_id}"
 
