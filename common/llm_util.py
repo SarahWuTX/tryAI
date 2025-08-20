@@ -79,6 +79,16 @@ class DatasetProcessor:
             file_name (str, optional): 保存数据集的文件夹名称，默认为"dataset"
         """
         print("下载数据集...")
+        # 确定文件目录和文件名
+        ds_dir = "./" + self.file_name
+        if not os.path.exists(ds_dir):
+            os.mkdir(ds_dir)
+        self.train_filepath = ds_dir + "/train.jsonl"
+        self.val_filepath = ds_dir + "/val.jsonl"
+        if os.path.exists(self.train_filepath) and os.path.exists(self.val_filepath):
+            print("数据集已存在")
+            return self.train_filepath, self.val_filepath
+
         # 加载数据集并打乱顺序
         ds = MsDataset.load(self.ds_name, subset_name=self.subset_name, split='train')
         data_list = list(ds)
@@ -91,18 +101,16 @@ class DatasetProcessor:
         val_data = data_list[split_idx:]
 
         # 写入文件
-        ds_dir = "./" + self.file_name
-        os.mkdir(ds_dir)
-        self.train_filepath = ds_dir + "/train.jsonl"
-        self.val_filepath = ds_dir + "/val.jsonl"
-        with open(self.train_filepath, 'w', encoding='utf-8') as f:
-            for item in train_data:
-                json.dump(item, f, ensure_ascii=False)
-                f.write('\n')
-        with open(self.val_filepath, 'w', encoding='utf-8') as f:
-            for item in val_data:
-                json.dump(item, f, ensure_ascii=False)
-                f.write('\n')
+        if not os.path.exists(self.train_filepath):
+            with open(self.train_filepath, 'w', encoding='utf-8') as f:
+                for item in train_data:
+                    json.dump(item, f, ensure_ascii=False)
+                    f.write('\n')
+        if not os.path.exists(self.val_filepath):
+            with open(self.val_filepath, 'w', encoding='utf-8') as f:
+                for item in val_data:
+                    json.dump(item, f, ensure_ascii=False)
+                    f.write('\n')
         print(f"The dataset has been split successfully.")
         print(f"Train Set Size：{len(train_data)}")
         print(f"Val Set Size：{len(val_data)}")
